@@ -429,7 +429,7 @@ def get_prob_ratios_from_data(
 
 
 @dataclass
-class SingleRatioResult:
+class SingleCardsOfInterestCountResult:
     total_win_rate: float
     cards_of_interest_seen_rates: np.ndarray
     win_rates_per_cards_of_interest_seen: np.ndarray
@@ -437,15 +437,15 @@ class SingleRatioResult:
 
 
 @dataclass
-class RatioAnalysisResult:
-    single_ratio_results: Dict[int, SingleRatioResult]
+class WeightedSamplingResult:
+    single_coi_count_results: Dict[int, SingleCardsOfInterestCountResult]
 
 
-def plot_result(result: RatioAnalysisResult) -> None:
+def plot_result(result: WeightedSamplingResult) -> None:
     x, y = [], []
-    for num_cards_of_interest, single_ratio_result in iter(sorted(result.single_ratio_results.items())):
+    for num_cards_of_interest, single_coi_count_result in iter(sorted(result.single_coi_count_results.items())):
         x.append(num_cards_of_interest)
-        y.append(single_ratio_result.total_win_rate)
+        y.append(single_coi_count_result.total_win_rate)
 
     plt.bar(x, y)
     for x_val, y_val in zip(x, y):
@@ -458,7 +458,7 @@ def plot_result(result: RatioAnalysisResult) -> None:
     plt.show()
 
 
-def ratio_analysis(
+def weighted_sampling_analysis(
         cards_of_interest: CardFilter,
         start_range: int,
         end_range: int,
@@ -469,7 +469,7 @@ def ratio_analysis(
         card_path: Path = PATH / "cards.csv",
         abilities_path: Path = PATH / "abilities.csv",
         show_plots: bool = False
-) -> RatioAnalysisResult:
+) -> WeightedSamplingResult:
     if data_path is None:
         data_path = PATH / f"replay_data_public.{expansion}.TradDraft.csv"
     if replacement_cards is None:
@@ -527,9 +527,9 @@ def ratio_analysis(
                                                     cards_of_interest_seen_weights,
                                                     out=np.zeros_like(win_weights_per_cards_of_interest_seen),
                                                     where=cards_of_interest_seen_weights != 0)
-    result = RatioAnalysisResult(
-        single_ratio_results={
-            i + start_range: SingleRatioResult(
+    result = WeightedSamplingResult(
+        single_coi_count_results={
+            i + start_range: SingleCardsOfInterestCountResult(
                 total_win_rate=win_weights[i] / total_weights[i],
                 cards_of_interest_seen_rates=cards_of_interest_seen_weights[:, :, i] / total_weights[i],
                 win_rates_per_cards_of_interest_seen=win_rate_per_cards_of_interest_seen[:, :, i],
@@ -547,7 +547,7 @@ def ratio_analysis(
 
 
 if __name__ == "__main__":
-    ratio_analysis(
+    weighted_sampling_analysis(
         LandFilter(),
         12,
         20,
