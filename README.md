@@ -19,7 +19,7 @@ def weighted_sampling_analysis(
         show_plots: bool = False
 ) -> WeightedSamplingResult:
 ```
-* `cards_of_interest: CardFilter` this is a function that defines why types of cards you are testing.
+* `cards_of_interest: CardFilter` this is a function that defines what types of cards you are testing.
 For example, if you wanted to test how decks do with different number of lands in the deck
 you would pass in `LandFilter` which returns `True` if the card is a land.
 * `start_range: int, end_range: int` these two define the range on the number of cards of interest in the deck distributions you are targeting.
