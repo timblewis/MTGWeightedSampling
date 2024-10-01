@@ -9,7 +9,6 @@ import numpy as np
 
 import matplotlib.pyplot as plt
 
-
 PATH = Path(__file__).parent
 
 
@@ -104,9 +103,10 @@ def extract_game_data(
         card_deck_indices: Dict[str, int],
         card_id_dict: Dict[int, Card],
         card_name_dict: Dict[str, Card],
-        abilities: Dict[int, str],
         cards_of_interest: CardFilter,
         replacement_cards: CardFilter,
+        extract_abilities: bool = False,
+        abilities: Optional[Dict[int, str]] = None,
 ) -> GameData:
     win = data[column_name_dict["won"]] == "True"
     on_play = data[column_name_dict["on_play"]] == "True"
@@ -137,8 +137,12 @@ def extract_game_data(
 
     # handle abilities
     abilities_used = []
-    for i in range(1, 31):
-        abilities_used += parse_abilities_from_ids(data[column_name_dict[f"user_turn_{i}_user_abilities"]], abilities)
+    if extract_abilities and abilities is not None:
+        for i in range(1, 31):
+            abilities_used += parse_abilities_from_ids(
+                data[column_name_dict[f"user_turn_{i}_user_abilities"]],
+                abilities
+            )
 
     return GameData(
         win=win,
@@ -236,6 +240,22 @@ class BLBNoDeckManipulation(GameFilter):
                                "Lightshell Duo", "Lilypad Village", "Mind Drill Assailant", "Mindwhisker",
                                "Psychic Whorl", "Rabbit Response", "Spellgyre", "Starlit Soothsayer",
                                "Thornvault Forager", "Valley Questcaller", "Veteran Guardmouse"}
+
+    def __call__(self, data: GameData) -> bool:
+        return all(
+            card.name not in self.deck_manipulation_cards
+            for card in data.deck
+        )
+
+
+class DMUNoDeckManipulation(GameFilter):
+    deck_manipulation_cards = {"Automatic Librarian", "Crystal Grotto", "Djinn of the Fountain", "Furious Bellow",
+                               "Guardian of New Benalia", "Herd Migration", "Impede Momentum", "Jaya's Firenado",
+                               "Joint Exploration", "Lagomos, Hand of Hatred", "Micromancer", "Phyrexian Vivisector",
+                               "Runic Shot", "Samite Herbalist", "Scout the Wilderness", "Shadow-Rite Priest",
+                               "Shield-Wall Sentinel", "Slimefoot's Survey", "Sprouting Goblin", "The Cruelty of Gix",
+                               "The Weatherseed Treaty", "Threats Undetected", "Tidepool Turtle",
+                               "Urza Assembles the Titans", "Uurg, Spawn of Turg", "Weatherlight Compleated"}
 
     def __call__(self, data: GameData) -> bool:
         return all(
@@ -401,6 +421,8 @@ def get_prob_ratios_from_data(
         data: GameData,
         start_range: int,
         end_range: int,
+        total_games: int,
+        coi_in_decks: List[int],
 ) -> np.array:
     result = get_prob_ratios_from_counts(
         len(data.deck),
@@ -424,6 +446,14 @@ def get_prob_ratios_from_data(
             start_range,
             end_range
         )
+
+    max_coi_seen = max(max(data.cards_of_interest_in_candidates, default=0), data.cards_of_interest_drawn)
+    max_non_coi_seen = max(
+        max([7 - c for c in data.cards_of_interest_in_candidates], default=0),
+        len(data.cards_drawn) - data.cards_of_interest_drawn
+    )
+    impossible_games = sum(coi_in_decks[:max_coi_seen]) + sum(coi_in_decks[41 - max_non_coi_seen:])
+    result *= total_games / (total_games - impossible_games)
 
     return result
 
@@ -467,16 +497,22 @@ def weighted_sampling_analysis(
         expansion: str = "BLB",
         data_path: Optional[Path] = None,
         card_path: Path = PATH / "cards.csv",
-        abilities_path: Path = PATH / "abilities.csv",
+        extract_abilities: bool = False,
+        abilities_path: Optional[Path] = None,
         show_plots: bool = False
 ) -> WeightedSamplingResult:
     if data_path is None:
         data_path = PATH / f"replay_data_public.{expansion}.TradDraft.csv"
     if replacement_cards is None:
         replacement_cards = OtherNonLands(cards_of_interest)
+    if extract_abilities and abilities_path is None:
+        abilities_path = PATH / "abilities.csv"
 
     card_id_dict, card_name_dict = generate_card_dicts(card_path)
-    abilities = generate_abilities_dict(abilities_path)
+    if extract_abilities:
+        abilities = generate_abilities_dict(abilities_path)
+    else:
+        abilities = dict()
     data_generator = get_event_data_generator(path=data_path)
     range_size = end_range - start_range + 1
     total_weights = np.array([0.0 for _ in range(range_size)])
@@ -491,7 +527,10 @@ def weighted_sampling_analysis(
     column_name_dict: Dict[str, int] = {name: i for i, name in enumerate(column_names)}
     card_deck_indices = {name[5:]: i for name, i in column_name_dict.items() if name.startswith("deck_")}
 
+    total_games = 0
     count = 0
+    games = []
+    coi_in_decks = [0] * 41
     for data in data_generator:
         game_data = extract_game_data(
             data=data,
@@ -501,14 +540,27 @@ def weighted_sampling_analysis(
             card_name_dict=card_name_dict,
             cards_of_interest=cards_of_interest,
             replacement_cards=replacement_cards,
+            extract_abilities=extract_abilities,
             abilities=abilities,
         )
+        count += 1
+        if count % 10000 == 0:
+            print(f"Games loaded: {count}")
         if len(game_data.deck) != 40 or (game_filter and not game_filter(game_data)):
             continue
+        games.append(game_data)
+        total_games += 1
+        coi_in_decks[game_data.cards_of_interest_in_deck] += 1
+    print(f"{total_games}/{count} games extracted into data set")
+
+    count = 0
+    for game_data in games:
         weights = get_prob_ratios_from_data(
             data=game_data,
             start_range=start_range,
             end_range=end_range,
+            total_games=total_games,
+            coi_in_decks=coi_in_decks,
         )
         total_weights += weights
         mulligan_weights[game_data.mulligans] += weights
