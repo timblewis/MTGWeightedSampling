@@ -15,7 +15,8 @@ def weighted_sampling_analysis(
         expansion: str = "BLB",
         data_path: Optional[Path] = None,
         card_path: Path = PATH / "cards.csv",
-        abilities_path: Path = PATH / "abilities.csv",
+        extract_abilities: bool = False,
+        abilities_path: Optional[Path] = None, PATH / "abilities.csv",
         show_plots: bool = False
 ) -> WeightedSamplingResult:
 ```
@@ -29,12 +30,18 @@ Suppose, we want to replace lands with creatures and we are looking at games for
 Then if we are targeting 16 lands we would weight the games so that they behave as if the deck had 11 creatures.
 And if we are targeting 18 lands we would weight the games so that they behave as if the deck had 9 creatures.
 By default this is set to other non-land cards, meaning any non-land that does not pass the `cards_of_interest` filter.
+* `game_filter: Optional[GameFilter] = None` this game filter defines what games will be looked at during the analysis.
+By default all games will be analyzed.
 * `expansion: str = "BLB", data_path: Optional[Path] = None` these define where the script will look for the 17lands data is to analyze.
 If `data_path` is set it will look there for the data.
 Otherwise it will look in the same directory as the script for a file named `replay_data_public.{expansion}.TradDraft.csv`.
-* `card_path: Path = PATH / "cards.csv", abilities_path: Path = PATH / "abilities.csv"`
-these define where the script will look for the card and abilities data from 17lands.
-By default it will look in the same directory as the script for files named `cards.csv` and `abilities.csv`.
+* `card_path: Path = PATH / "cards.csv"
+defines where the script will look for the card data from 17lands.
+By default it will look in the same directory as the script for files named `cards.csv`.
+* `extract_abilities: bool = False, abilities_path: Optional[Path]`
+decide whether abilities used during the game will be attached to game data and if so where to find the abilities data from 17lands.
+This data should only be necessary if your `game_filter` needs the abilities.
+If `extract_abilities` is set to `True` `abilities_path` will default to `abilities.csv` in the same directory as the script.
 * `show_plots: bool = False` lets the script know if you want plots to pop up when the data is done, false by default.
 * `WeightedSamplingResult` contains `single_coi_count_results` which is a dict mapping number of cards of interest (e.g. 16 lands, 17 lands, 18 lands, etc.) to `SingleCardsOfInterestCountResult`.
 `SingleCardsOfInterestCountResult` contains:
@@ -67,6 +74,7 @@ This should download a ZIP file which you should extract to the same directory y
 At the very bottom of the page in the "Cards List" table click the "Cards" link.
 Move the csv to the same directory you have the script saved.
 3. Abilities data: Also found https://www.17lands.com/public_datasets.
+This should only be necessary if `extract_abilities` is set to `True` and your game filter uses ability data.
 Again at the very bottom of the page in the "Cards List" table click the "Abilities" link.
 Again move the csv to the same directory you have the script saved.
 4. Card winrate data: This should only be necessary if you are using the `ReplacementLevelNonLands` card filter which should be used for analyzing land counts.
