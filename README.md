@@ -12,7 +12,7 @@ def weighted_sampling_analysis(
         end_range: int,
         replacement_cards: Optional[CardFilter] = None,
         game_filter: Optional[GameFilter] = None,
-        expansion: str = "BLB",
+        expansion: str = DEFAULT_EXPANSION,
         data_path: Optional[Path] = None,
         card_path: Path = PATH / "cards.csv",
         extract_abilities: bool = False,
@@ -32,9 +32,10 @@ And if we are targeting 18 lands we would weight the games so that they behave a
 By default this is set to other non-land cards, meaning any non-land that does not pass the `cards_of_interest` filter.
 * `game_filter: Optional[GameFilter] = None` this game filter defines what games will be looked at during the analysis.
 By default all games will be analyzed.
-* `expansion: str = "BLB", data_path: Optional[Path] = None` these define where the script will look for the 17lands data is to analyze.
+* `expansion: str = DEFAULT_EXPANSION, data_path: Optional[Path] = None` these define where the script will look for the 17lands data is to analyze.
 If `data_path` is set it will look there for the data.
 Otherwise it will look in the same directory as the script for a file named `replay_data_public.{expansion}.TradDraft.csv`.
+The default expansion is Bloomborrow (BLB).
 * `card_path: Path = PATH / "cards.csv"
 defines where the script will look for the card data from 17lands.
 By default it will look in the same directory as the script for files named `cards.csv`.
@@ -92,25 +93,12 @@ class LandFilter(CardFilter):
     def __call__(self, card: Card) -> bool:
         return "Land" in card.types
 
-class BLBNoDeckManipulation(GameFilter):
-  deck_manipulation_cards = {"Carrot Cake", "Diresight", "Fabled Passage", "Fountainport Bell",
-                             "Glarb, Calamity's Augur", "Gossip's Talent", "Heaped Harvest", "Hidden Grotto",
-                             "Lightshell Duo", "Lilypad Village", "Mind Drill Assailant", "Mindwhisker",
-                             "Psychic Whorl", "Rabbit Response", "Spellgyre", "Starlit Soothsayer",
-                             "Thornvault Forager", "Valley Questcaller", "Veteran Guardmouse"}
-
-  def __call__(self, data: GameData) -> bool:
-      return all(
-          card.name not in self.deck_manipulation_cards
-          for card in data.deck
-      )
-
 result = weighted_sampling_analysis(
     cards_of_interest=LandFilter(),
     start_range=12,
     end_range=20,
     replacement_cards=ReplacementLevelNonLands(),
-    game_filter=BLBNoDeckManipulation(),
+    game_filter=NoDeckManipulation(),
     show_plots=True,
 )
 ```
@@ -130,7 +118,7 @@ result = weighted_sampling_analysis(
     start_range=12,
     end_range=20,
     replacement_cards=ReplacementLevelNonLands(),
-    game_filter=BLBNoDeckManipulation().also(DeckColorFilter("GB")),
+    game_filter=NoDeckManipulation().also(DeckColorFilter("GB")),
     show_plots=True,
 )
 ```
@@ -146,7 +134,7 @@ result = weighted_sampling_analysis(
     cards_of_interest=TwoDropFilter(),
     start_range=2,
     end_range=8,
-    game_filter=BLBNoDeckManipulation(),
+    game_filter=NoDeckManipulation(),
     show_plots=True,
 )
 ```
@@ -154,27 +142,12 @@ result = weighted_sampling_analysis(
 ## DMU Land Analysis
 
 ```Python
-class DMUNoDeckManipulation(GameFilter):
-    deck_manipulation_cards = {"Automatic Librarian", "Crystal Grotto", "Djinn of the Fountain", "Furious Bellow",
-                               "Guardian of New Benalia", "Herd Migration", "Impede Momentum", "Jaya's Firenado",
-                               "Joint Exploration", "Lagomos, Hand of Hatred", "Micromancer", "Phyrexian Vivisector",
-                               "Runic Shot", "Samite Herbalist", "Scout the Wilderness", "Shadow-Rite Priest",
-                               "Shield-Wall Sentinel", "Slimefoot's Survey", "Sprouting Goblin", "The Cruelty of Gix",
-                               "The Weatherseed Treaty", "Threats Undetected", "Tidepool Turtle",
-                               "Urza Assembles the Titans", "Uurg, Spawn of Turg", "Weatherlight Compleated"}
-
-    def __call__(self, data: GameData) -> bool:
-        return all(
-            card.name not in self.deck_manipulation_cards
-            for card in data.deck
-        )
-
 result = weighted_sampling_analysis(
     cards_of_interest=LandFilter(),
     start_range=12,
     end_range=20,
     replacement_cards=ReplacementLevelNonLands(expansion="DMU"),
-    game_filter=DMUNoDeckManipulation(),
+    game_filter=NoDeckManipulation(expansion="DMU"),
     expansion="DMU"
     show_plots=True,
 )
@@ -184,15 +157,8 @@ result = weighted_sampling_analysis(
 
 * The 17lands event data doesn't contain information about the result of scrying, surveiling, or searching your library.
 The results of these effects would need to be taken into account in order to get accurate results.
-Initially to solve this problem, I used a general `NoDeckManipulation` filter which filtered out games where one of these effects happened.
-However this meant that shorter games were less likely to be filtered out.
-So, instead I created filters, like `BLBNoDeckManipulation`, that filter out all games where the deck has a card with one of these effects.
-The issue is that the actual card text isn't in the data so I just used a scryfall search to creaete these filters manually.
-This process should probably be automated but I didn't do that.
+I recommend using `NoDeckManipulation` game filter to remove games where the deck has a card with one of these effects.
 Unfortunately, this filter significantly lowers the number of games analyzed.
 * The data needs to be somewhat similar to the deck distributions you are targeting.
 This method can't add weight to games that don't exist.
-For example, suppose you are testing a very narrow set of cards of interest where most decks have maybe 1 or 2.
-The analysis is going to under-represent games where 3 cards of interest are drawn.
-In this case consider filtering by decks that contain significant numbers of your cards of interest.
 Also the more your target deck differs from real decks in the data the higher the weights are going to be, effectively lowering your sample rate.
