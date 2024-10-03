@@ -1,15 +1,17 @@
 import csv
 import math
+import scrython
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Iterable, Dict, Tuple, Optional, Set
+from typing import List, Iterable, Dict, Tuple, Optional, Set, Container
 
 import numpy as np
 
 import matplotlib.pyplot as plt
 
 PATH = Path(__file__).parent
+DEFAULT_EXPANSION = "BLB"
 
 
 @dataclass(frozen=True)
@@ -208,6 +210,14 @@ class ContainsCards(GameFilter):
         return True
 
 
+class ExcludeCards(GameFilter):
+    def __init__(self, card_names: Container[str]):
+        self.card_names = card_names
+
+    def __call__(self, data: GameData) -> bool:
+        return not any(card.name in self.card_names for card in data.deck)
+
+
 class DeckColorFilter(GameFilter):
     def __init__(self, colors: str):
         self.colors = colors
@@ -225,43 +235,15 @@ class DeckSizeFilter(GameFilter):
 
 
 class NoDeckManipulation(GameFilter):
-    def __call__(self, data: GameData) -> bool:
-        return all(
-            "scry" not in ability.lower()
-            and "surveil" not in ability.lower()
-            and "search your library" not in ability.lower()
-            for ability in data.abilities_used
+    def __init__(self, expansion: str = DEFAULT_EXPANSION):
+        excluded_cards = scrython.cards.search.Search(
+            q=f"set:{expansion} (o:scry or o:surveil or o:\"search your library\")"
         )
-
-
-class BLBNoDeckManipulation(GameFilter):
-    deck_manipulation_cards = {"Carrot Cake", "Diresight", "Fabled Passage", "Fountainport Bell",
-                               "Glarb, Calamity's Augur", "Gossip's Talent", "Heaped Harvest", "Hidden Grotto",
-                               "Lightshell Duo", "Lilypad Village", "Mind Drill Assailant", "Mindwhisker",
-                               "Psychic Whorl", "Rabbit Response", "Spellgyre", "Starlit Soothsayer",
-                               "Thornvault Forager", "Valley Questcaller", "Veteran Guardmouse"}
+        excluded_card_names = {card["name"] for card in excluded_cards.scryfallJson["data"]}
+        self.delegate = ExcludeCards(excluded_card_names)
 
     def __call__(self, data: GameData) -> bool:
-        return all(
-            card.name not in self.deck_manipulation_cards
-            for card in data.deck
-        )
-
-
-class DMUNoDeckManipulation(GameFilter):
-    deck_manipulation_cards = {"Automatic Librarian", "Crystal Grotto", "Djinn of the Fountain", "Furious Bellow",
-                               "Guardian of New Benalia", "Herd Migration", "Impede Momentum", "Jaya's Firenado",
-                               "Joint Exploration", "Lagomos, Hand of Hatred", "Micromancer", "Phyrexian Vivisector",
-                               "Runic Shot", "Samite Herbalist", "Scout the Wilderness", "Shadow-Rite Priest",
-                               "Shield-Wall Sentinel", "Slimefoot's Survey", "Sprouting Goblin", "The Cruelty of Gix",
-                               "The Weatherseed Treaty", "Threats Undetected", "Tidepool Turtle",
-                               "Urza Assembles the Titans", "Uurg, Spawn of Turg", "Weatherlight Compleated"}
-
-    def __call__(self, data: GameData) -> bool:
-        return all(
-            card.name not in self.deck_manipulation_cards
-            for card in data.deck
-        )
+        return self.delegate(data)
 
 
 def generate_card_dicts(
@@ -286,7 +268,7 @@ def generate_card_dicts(
 
 
 def generate_card_winrates(
-        expansion: str = "BLB",
+        expansion: str = DEFAULT_EXPANSION,
         path: Optional[Path] = None,
 ) -> Dict[str, Optional[float]]:
     if path is None:
@@ -305,7 +287,7 @@ class ReplacementLevelNonLands(CardFilter):
     def __init__(
             self,
             replacement_level_winrate: float = 0.55,
-            expansion: str = "BLB",
+            expansion: str = DEFAULT_EXPANSION,
             card_ratings_path: Optional[Path] = None,
     ):
         if card_ratings_path is None:
@@ -332,7 +314,7 @@ def generate_abilities_dict(
 
 
 def get_event_data_generator(
-        expansion: str = "BLB",
+        expansion: str = DEFAULT_EXPANSION,
         path: Path = None,
 ) -> Iterable[List[str]]:
     if path is None:
@@ -453,7 +435,8 @@ def get_prob_ratios_from_data(
         len(data.cards_drawn) - data.cards_of_interest_drawn
     )
     impossible_games = sum(coi_in_decks[:max_coi_seen]) + sum(coi_in_decks[41 - max_non_coi_seen:])
-    result *= total_games / (total_games - impossible_games)
+    if impossible_games != total_games:
+        result *= total_games / (total_games - impossible_games)
 
     return result
 
@@ -494,7 +477,7 @@ def weighted_sampling_analysis(
         end_range: int,
         replacement_cards: Optional[CardFilter] = None,
         game_filter: Optional[GameFilter] = None,
-        expansion: str = "BLB",
+        expansion: str = DEFAULT_EXPANSION,
         data_path: Optional[Path] = None,
         card_path: Path = PATH / "cards.csv",
         extract_abilities: bool = False,
@@ -600,10 +583,10 @@ def weighted_sampling_analysis(
 
 if __name__ == "__main__":
     weighted_sampling_analysis(
-        LandFilter(),
-        12,
-        20,
+        cards_of_interest=LandFilter(),
+        start_range=12,
+        end_range=20,
         replacement_cards=ReplacementLevelNonLands(),
-        game_filter=BLBNoDeckManipulation(),
+        game_filter=NoDeckManipulation(),
         show_plots=True,
     )
