@@ -462,9 +462,9 @@ def plot_result(result: WeightedSamplingResult) -> None:
 
     plt.bar(x, y)
     for x_val, y_val in zip(x, y):
-        plt.text(x_val - 0.5, y_val, f"{y_val * 100:.2f}%")
+        plt.text(x_val, y_val, f"{y_val * 100:.2f}%", ha='center')
 
-    plt.title("Cards of Interest Winrates")
+    plt.title("Weighted Sampling Analysis")
     plt.xlabel("Cards of Interest")
     plt.ylabel("Winrate")
 
@@ -586,7 +586,8 @@ if __name__ == "__main__":
         cards_of_interest=LandFilter(),
         start_range=12,
         end_range=20,
-        replacement_cards=ReplacementLevelNonLands(),
-        game_filter=NoDeckManipulation(),
+        expansion="BLB",
+        replacement_cards=ReplacementLevelNonLands(expansion="BLB"),
+        game_filter=NoDeckManipulation("BLB"),
         show_plots=True,
     )
